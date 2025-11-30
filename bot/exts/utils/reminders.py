@@ -22,7 +22,7 @@ from bot.constants import (
     NEGATIVE_REPLIES,
     POSITIVE_REPLIES,
     Roles,
-    STAFF_PARTNERS_COMMUNITY_ROLES,
+    STAFF_AND_COMMUNITY_ROLES,
 )
 from bot.converters import Duration, UnambiguousUser
 from bot.errors import LockedResourceError
@@ -82,7 +82,7 @@ class ModifyReminderConfirmationView(discord.ui.View):
 class OptInReminderMentionView(discord.ui.View):
     """A button to opt-in to get notified of someone else's reminder."""
 
-    def __init__(self, cog: "Reminders", reminder: dict, expiration: Duration):
+    def __init__(self, cog: Reminders, reminder: dict, expiration: Duration):
         super().__init__()
 
         self.cog = cog
@@ -288,7 +288,7 @@ class Reminders(Cog):
 
         If mentions aren't allowed, also return the type of mention(s) disallowed.
         """
-        if await has_no_roles_check(ctx, *STAFF_PARTNERS_COMMUNITY_ROLES):
+        if await has_no_roles_check(ctx, *STAFF_AND_COMMUNITY_ROLES):
             return False, "members/roles"
         if await has_no_roles_check(ctx, *MODERATION_ROLES):
             return all(isinstance(mention, discord.User | discord.Member) for mention in mentions), "roles"
@@ -455,9 +455,9 @@ class Reminders(Cog):
 
         For example, to set a reminder that expires in 3 days and 1 minute, you can do `!remind new 3d1M Do something`.
         """
-        # If the user is not staff, partner or part of the python community,
+        # If the user is not staff or part of the python community,
         # we need to verify whether or not to make a reminder at all.
-        if await has_no_roles_check(ctx, *STAFF_PARTNERS_COMMUNITY_ROLES):
+        if await has_no_roles_check(ctx, *STAFF_AND_COMMUNITY_ROLES):
 
             # If they don't have permission to set a reminder in this channel
             if ctx.channel.id not in WHITELISTED_CHANNELS:

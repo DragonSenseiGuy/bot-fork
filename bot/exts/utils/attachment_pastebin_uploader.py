@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import re
 
 import discord
@@ -77,8 +75,21 @@ class AutoTextAttachmentUploader(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
         """Listens for messages containing attachments and offers to upload them to the pastebin."""
-        # Check if the message contains an embedded file and is not sent by a bot or in DMs.
-        if message.author.bot or not message.guild or not any("charset" in a.content_type for a in message.attachments):
+        # Check the message is not sent by a bot or in DMs.
+        if message.author.bot or not message.guild:
+            return
+
+        # Check if the message contains any text-based attachments.
+        # we only require a charset here, as its setting is matched
+        attachments: list[discord.Attachment] = []
+        for attachment in message.attachments:
+            if (
+                attachment.content_type
+                and "charset" in attachment.content_type
+            ):
+                attachments.append(attachment)
+
+        if not attachments:
             return
 
         log.trace(f"Offering to upload attachments for {message.author} in {message.channel}, message {message.id}")
@@ -106,11 +117,7 @@ class AutoTextAttachmentUploader(commands.Cog):
         self.pending_messages.discard(message.id)
 
         # Extract the attachments.
-        files = [
-            await self._convert_attachment(f)
-            for f in message.attachments
-            if "charset" in f.content_type
-        ]
+        files = [await self._convert_attachment(f) for f in attachments]
 
         # Upload the files to the paste bin, exiting early if there's an error.
         log.trace(f"Attempting to upload {len(files)} file(s) to pastebin.")
@@ -128,7 +135,13 @@ class AutoTextAttachmentUploader(commands.Cog):
         # Send the user a DM with the delete link for the paste.
         # The angle brackets around the remove link are required to stop Discord from visiting the URL to produce a
         # preview, thereby deleting the paste
-        await message.author.send(content=f"[Click here](<{paste_response.removal}>) to delete your recent paste.")
+        try:
+            await message.author.send(
+                f"[Click here](<{paste_response.removal}>) to delete the pasted attachment"
+                f" contents copied from [your message](<{message.jump_url}>)"
+            )
+        except discord.Forbidden:
+            log.debug(f"User {message.author} has DMs disabled, skipping delete link DM.")
 
         # Edit the bot message to contain the link to the paste.
         await bot_reply.edit(content=f"[Click here]({paste_response.link}) to see this code in our pastebin.")

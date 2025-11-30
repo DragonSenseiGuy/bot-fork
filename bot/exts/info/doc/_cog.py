@@ -1,12 +1,10 @@
-from __future__ import annotations
-
 import asyncio
 import sys
 import textwrap
 from collections import defaultdict
 from contextlib import suppress
 from types import SimpleNamespace
-from typing import Literal, NamedTuple
+from typing import Literal
 
 import aiohttp
 import discord
@@ -23,9 +21,15 @@ from bot.utils.lock import SharedEvent, lock
 from bot.utils.messages import send_denial, wait_for_deletion
 
 from . import NAMESPACE, PRIORITY_PACKAGES, _batch_parser, doc_cache
+from ._doc_item import DocItem
 from ._inventory_parser import InvalidHeaderError, InventoryDict, fetch_inventory
 
 log = get_logger(__name__)
+
+# groups to ignore from parsing
+IGNORE_GROUPS = (
+    "std:doc",
+)
 
 # symbols with a group contained here will get the group prefixed on duplicates
 FORCE_PREFIX_GROUPS = (
@@ -41,21 +45,6 @@ NOT_FOUND_DELETE_DELAY = RedirectOutput.delete_delay
 FETCH_RESCHEDULE_DELAY = SimpleNamespace(first=2, repeated=5)
 
 COMMAND_LOCK_SINGLETON = "inventory refresh"
-
-
-class DocItem(NamedTuple):
-    """Holds inventory symbol information."""
-
-    package: str  # Name of the package name the symbol is from
-    group: str  # Interpshinx "role" of the symbol, for example `label` or `method`
-    base_url: str  # Absolute path to to which the relative path resolves, same for all items with the same package
-    relative_url_path: str  # Relative path to the page where the symbol is located
-    symbol_id: str  # Fragment id used to locate the symbol on the page
-
-    @property
-    def url(self) -> str:
-        """Return the absolute url to the symbol."""
-        return self.base_url + self.relative_url_path
 
 
 class DocCog(commands.Cog):
@@ -96,6 +85,8 @@ class DocCog(commands.Cog):
 
         for group, items in inventory.items():
             for symbol_name, relative_doc_url in items:
+                if group in IGNORE_GROUPS:
+                    continue
 
                 # e.g. get 'class' from 'py:class'
                 group_name = group.split(":")[1]
